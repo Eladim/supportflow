@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  AGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ActivityAction {
+  TICKET_CREATED
+  TICKET_UPDATED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  ASSIGNED
+  COMMENT_ADDED
+  NOTE_ADDED
+  ATTACHMENT_ADDED
+}
+
+enum NotificationType {
+  TICKET_ASSIGNED
+  TICKET_UPDATED
+  COMMENT_ADDED
+  NOTE_ADDED
+  MENTION
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         Role      @default(AGENT)
+  avatarUrl    String?   @map("avatar_url")
+  lastSeenAt   DateTime? @map("last_seen_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens     RefreshToken[]
+  createdTickets    Ticket[]         @relation("CreatedTickets")
+  assignedTickets   Ticket[]         @relation("AssignedTickets")
+  comments          TicketComment[]
+  notes             InternalNote[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]    @relation("ActorLogs")
+  attachments       Attachment[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  replacedById  String?   @map("replaced_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Ticket {
+  id          String          @id @default(uuid()) @db.Uuid
+  title       String
+  description String          @db.Text
+  status      TicketStatus    @default(OPEN)
+  priority    TicketPriority  @default(MEDIUM)
+  category    String
+  dueAt       DateTime?       @map("due_at")
+  createdById String          @map("created_by_id") @db.Uuid
+  assigneeId  String?         @map("assignee_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  createdBy  User             @relation("CreatedTickets", fields: [createdById], references: [id])
+  assignee   User?            @relation("AssignedTickets", fields: [assigneeId], references: [id])
+  comments   TicketComment[]
+  notes      InternalNote[]
+  activity   ActivityLog[]
+  attachments Attachment[]
+
+  @@index([status, priority, assigneeId, createdAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId String   @map("ticket_id") @db.Uuid
+  authorId String   @map("author_id") @db.Uuid
+  body     String   @db.Text
+  parentId String?  @map("parent_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ticket   Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author   User            @relation(fields: [authorId], references: [id])
+  parent   TicketComment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  TicketComment[] @relation("CommentThread")
+  attachments Attachment[]
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comments")
+}
+
+model InternalNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId String   @map("ticket_id") @db.Uuid
+  authorId String   @map("author_id") @db.Uuid
+  body     String   @db.Text
+  parentId String?  @map("parent_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ticket   Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author   User           @relation(fields: [authorId], references: [id])
+  parent   InternalNote?  @relation("NoteThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  InternalNote[] @relation("NoteThread")
+  attachments Attachment[]
+
+  @@index([ticketId, createdAt])
+  @@map("internal_notes")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  body      String?          @db.Text
+  data      Json             @default("{}")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id        String         @id @default(uuid()) @db.Uuid
+  actorId   String?        @map("actor_id") @db.Uuid
+  ticketId  String?        @map("ticket_id") @db.Uuid
+  action    ActivityAction
+  metadata  Json           @default("{}")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  actor  User?   @relation("ActorLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("activity_logs")
+}
+
+model Attachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  ticketId     String?  @map("ticket_id") @db.Uuid
+  commentId    String?  @map("comment_id") @db.Uuid
+  noteId       String?  @map("note_id") @db.Uuid
+  uploadedById String   @map("uploaded_by_id") @db.Uuid
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  storageKey   String   @map("storage_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment    TicketComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  note       InternalNote?  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  uploadedBy User           @relation(fields: [uploadedById], references: [id])
+
+  @@map("attachments")
+}
