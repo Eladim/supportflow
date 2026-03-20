@@ -1,31 +1,14 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/tickets",
-  "/team",
-  "/analytics",
-  "/settings",
-];
-
-const AUTH_PAGES = ["/login", "/register"];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const refresh = request.cookies.get("sf_refresh")?.value;
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-  if (isProtected && !refresh) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-  if (AUTH_PAGES.some((p) => pathname.startsWith(p)) && refresh) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
+/**
+ * Auth is enforced in the app shell via {@link ./components/require-auth.tsx}.
+ *
+ * We do not gate on the `sf_refresh` cookie here: that cookie is host-scoped to the API
+ * (e.g. *.onrender.com). On a separate frontend host (e.g. Vercel), middleware would never
+ * see it, yet localhost can appear to work because browsers relax cookie port matching for
+ * localhost — so checking the cookie in middleware breaks production split-domain deploys.
+ */
+export function middleware(): NextResponse {
   return NextResponse.next();
 }
 

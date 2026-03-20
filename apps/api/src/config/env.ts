@@ -19,6 +19,14 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/** Origins must match the browser's `Origin` header exactly (no trailing slash). */
+export function parseCorsOrigins(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+}
+
 let cached: Env | null = null;
 
 export function loadEnv(): Env {

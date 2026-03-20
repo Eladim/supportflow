@@ -25,6 +25,20 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function refreshCookieAttrs(): { secure: boolean; sameSite: "lax" | "none" } {
+  const env = loadEnv();
+  const secure = env.COOKIE_SECURE || env.NODE_ENV === "production";
+  return {
+    secure,
+    sameSite: secure ? "none" : "lax",
+  };
+}
+
+function clearRefreshCookieRes(res: Response): void {
+  const { secure, sameSite } = refreshCookieAttrs();
+  res.clearCookie(REFRESH_COOKIE, { path: "/", secure, sameSite });
+}
+
 async function setRefreshCookie(res: Response, userId: string): Promise<string> {
   const env = loadEnv();
   const raw = generateRefreshToken();
@@ -35,11 +49,11 @@ async function setRefreshCookie(res: Response, userId: string): Promise<string> 
   await prisma.refreshToken.create({
     data: { userId, tokenHash, expiresAt },
   });
-  const secure = env.COOKIE_SECURE ?? env.NODE_ENV === "production";
+  const { secure, sameSite } = refreshCookieAttrs();
   res.cookie(REFRESH_COOKIE, raw, {
     httpOnly: true,
     secure,
-    sameSite: "lax",
+    sameSite,
     maxAge: env.REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
     path: "/",
   });
@@ -120,7 +134,7 @@ authRouter.post("/logout", async (req, res, next) => {
   try {
     const raw = req.cookies[REFRESH_COOKIE] as string | undefined;
     await clearRefreshToken(raw);
-    res.clearCookie(REFRESH_COOKIE, { path: "/" });
+    clearRefreshCookieRes(res);
     res.status(204).send();
   } catch (e) {
     next(e);
@@ -143,12 +157,13 @@ authRouter.post("/refresh", authLimiter, async (req, res, next) => {
       record.revokedAt ||
       record.expiresAt.getTime() < Date.now()
     ) {
-      res.clearCookie(REFRESH_COOKIE, { path: "/" });
+      clearRefreshCookieRes(res);
       next(new AppError(401, "INVALID_REFRESH", "Invalid refresh token"));
       return;
     }
     const user = await prisma.user.findUnique({ where: { id: record.userId } });
     if (!user) {
+      clearRefreshCookieRes(res);
       next(new AppError(401, "INVALID_REFRESH", "User not found"));
       return;
     }

@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -34,8 +35,13 @@ const schema = z.object({
 });
 
 export default function RegisterPage() {
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, user, ready } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!ready || !user) return;
+    void router.replace("/dashboard");
+  }, [ready, user, router]);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),

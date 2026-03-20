@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -42,10 +42,15 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const { login } = useAuth();
+  const { login, user, ready } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
+
+  useEffect(() => {
+    if (!ready || !user) return;
+    void router.replace(next);
+  }, [ready, user, router, next]);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),

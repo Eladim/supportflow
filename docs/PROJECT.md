@@ -60,7 +60,7 @@ Public **registration** creates users with role **AGENT** only; promote to **ADM
 3. **Refresh** — httpOnly cookie `sf_refresh`; `POST /api/v1/auth/refresh` rotates the session.
 4. **Current user** — `GET /api/v1/auth/me`.
 
-The Next **middleware** (`apps/web/middleware.ts`) redirects unauthenticated users away from protected app routes based on the refresh cookie (no access token needed for that check).
+Protected routes rely on the **`RequireAuth`** client wrapper (`apps/web/components/require-auth.tsx`): the httpOnly refresh cookie is scoped to the **API host**, so Next middleware cannot use it when the web app is on another origin (e.g. Vercel + Render). Reloads and deep links still get a client-side redirect to `/login` if there is no valid session.
 
 ## API surface (v1)
 

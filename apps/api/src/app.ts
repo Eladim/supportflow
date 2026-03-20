@@ -3,7 +3,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
-import { loadEnv } from "./config/env.js";
+import { loadEnv, parseCorsOrigins } from "./config/env.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { globalLimiter } from "./middlewares/rate-limit.js";
 import { openApiDocument } from "./openapi/spec.js";
@@ -17,7 +17,7 @@ export function createApp(): express.Express {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CORS_ORIGIN.split(",").map((s) => s.trim()),
+      origin: parseCorsOrigins(env.CORS_ORIGIN),
       credentials: true,
     }),
   );
