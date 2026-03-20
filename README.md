@@ -11,6 +11,18 @@ You can develop either **fully on the host** (`pnpm` + local or containerized Po
 - `packages/shared` — optional Zod/constants (extend as needed)
 - `docs/` — planning notes (`SUPPORTFLOW_PLAN.md`) and **[project documentation](docs/PROJECT.md)** (architecture, API, env vars)
 
+## Tech stack
+
+| Layer | Technologies |
+|--------|----------------|
+| **Monorepo** | [pnpm](https://pnpm.io/) workspaces (`apps/*`, `packages/*`), Node **20+**, TypeScript |
+| **Web** (`apps/web`) | [Next.js](https://nextjs.org/) 15 (App Router), [React](https://react.dev/) 19, [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) (Radix primitives), [TanStack Query](https://tanstack.com/query), [react-hook-form](https://react-hook-form.com/) + [Zod](https://zod.dev/), [next-themes](https://github.com/pacocoursey/next-themes), [Recharts](https://recharts.org/), [Socket.IO client](https://socket.io/docs/v4/client-api/), [sonner](https://sonner.emilkowal.ski/) toasts |
+| **API** (`apps/api`) | [Express](https://expressjs.com/) 4, [Socket.IO](https://socket.io/) (same process as HTTP), [Prisma](https://www.prisma.io/) ORM, [Zod](https://zod.dev/) validation, [JWT](https://github.com/auth0/node-jsonwebtoken) access tokens + httpOnly refresh cookie ([cookie-parser](https://github.com/expressjs/cookie-parser)), [Argon2](https://github.com/ranisalt/node-argon2) passwords, [Helmet](https://helmetjs.github.io/), [CORS](https://github.com/expressjs/cors), [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit), [Pino](https://getpino.io/) logging, [swagger-ui-express](https://github.com/scottie1984/swagger-ui-express) + hand-written OpenAPI spec |
+| **Data** | [PostgreSQL](https://www.postgresql.org/), Prisma migrations under `apps/api/prisma/migrations` |
+| **API style** | REST-ish JSON under `/api/v1`, OpenAPI at `/openapi.json` and `/api-docs`; realtime over WebSockets (Socket.IO) |
+
+**Local / deploy:** [Docker Compose](https://docs.docker.com/compose/) for Postgres + optional full stack (`docker-compose.yml`); Dockerfiles for `apps/api` and `apps/web` (Next [standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)).
+
 ## Prerequisites
 
 - Node **20+**, **pnpm** (`corepack enable` recommended)
