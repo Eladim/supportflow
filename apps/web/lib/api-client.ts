@@ -17,24 +17,45 @@ const SLOW_TOAST_DESCRIPTION =
  * Description: "Our backend is running on a free-tier server, which may go to sleep when inactive. It can take around 50 seconds or more to wake up and respond."
  */
 
+/** Concurrent API calls each wrap with `withSlowRequestNotice`; one shared toast avoids duplicates (e.g. refresh + login). */
+let inflightSlowWatches = 0;
+let globalSlowTimer: ReturnType<typeof setTimeout> | null = null;
+let globalSlowToastId: string | number | undefined;
+
+function beginSlowRequestWatch(): void {
+  if (typeof window === "undefined") return;
+  inflightSlowWatches += 1;
+  if (inflightSlowWatches !== 1) return;
+  globalSlowTimer = setTimeout(() => {
+    globalSlowTimer = null;
+    if (globalSlowToastId === undefined) {
+      globalSlowToastId = toast(SLOW_TOAST_TITLE, {
+        description: SLOW_TOAST_DESCRIPTION,
+        duration: Infinity,
+      });
+    }
+  }, SLOW_REQUEST_MS);
+}
+
+function endSlowRequestWatch(): void {
+  if (typeof window === "undefined") return;
+  inflightSlowWatches = Math.max(0, inflightSlowWatches - 1);
+  if (inflightSlowWatches > 0) return;
+  if (globalSlowTimer !== null) {
+    clearTimeout(globalSlowTimer);
+    globalSlowTimer = null;
+  }
+  if (globalSlowToastId !== undefined) {
+    toast.dismiss(globalSlowToastId);
+    globalSlowToastId = undefined;
+  }
+}
+
 function withSlowRequestNotice<T>(run: () => Promise<T>): Promise<T> {
   if (typeof window === "undefined") return run();
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let toastId: string | number | undefined;
-  timer = setTimeout(() => {
-    timer = null;
-    toastId = toast(SLOW_TOAST_TITLE, {
-      description: SLOW_TOAST_DESCRIPTION,
-      duration: Infinity,
-    });
-  }, SLOW_REQUEST_MS);
+  beginSlowRequestWatch();
   return run().finally(() => {
-    if (timer !== null) {
-      clearTimeout(timer);
-    }
-    if (toastId !== undefined) {
-      toast.dismiss(toastId);
-    }
+    endSlowRequestWatch();
   });
 }
 
