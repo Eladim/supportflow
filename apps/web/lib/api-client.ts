@@ -1,7 +1,42 @@
+import { toast } from "sonner";
 import { buildApiUrl } from "./api-url";
 import type { ApiErrorBody, PublicUser } from "./types";
 
 const ACCESS_STORAGE = "sf_access";
+
+/** After this many ms, show a “cold start” hint (e.g. Render free tier spin-down). */
+const SLOW_REQUEST_MS = 8_000;
+
+const SLOW_TOAST_TITLE = "Backend is waking up";
+const SLOW_TOAST_DESCRIPTION =
+  "The server is hosted on a free-tier instance and may take around 50 seconds or more to start after inactivity. Your request is still being processed.";
+
+/*
+ * Alternative copy if you want to swap the strings above:
+ * Title: "Please wait a moment"
+ * Description: "Our backend is running on a free-tier server, which may go to sleep when inactive. It can take around 50 seconds or more to wake up and respond."
+ */
+
+function withSlowRequestNotice<T>(run: () => Promise<T>): Promise<T> {
+  if (typeof window === "undefined") return run();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let toastId: string | number | undefined;
+  timer = setTimeout(() => {
+    timer = null;
+    toastId = toast(SLOW_TOAST_TITLE, {
+      description: SLOW_TOAST_DESCRIPTION,
+      duration: Infinity,
+    });
+  }, SLOW_REQUEST_MS);
+  return run().finally(() => {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+    if (toastId !== undefined) {
+      toast.dismiss(toastId);
+    }
+  });
+}
 
 let memoryToken: string | null = null;
 
@@ -22,7 +57,7 @@ export function setAccessToken(token: string | null): void {
 
 /** Exchange httpOnly refresh cookie for an access token; returns null if session invalid. */
 export async function refreshAccessToken(): Promise<string | null> {
-  return tryRefresh();
+  return withSlowRequestNotice(() => tryRefresh());
 }
 
 async function tryRefresh(): Promise<string | null> {
@@ -58,6 +93,17 @@ export async function apiFetch<T>(
   init: RequestInit = {},
   retried = false,
 ): Promise<T> {
+  if (!retried) {
+    return withSlowRequestNotice(() => apiFetchImpl<T>(path, init, false));
+  }
+  return apiFetchImpl<T>(path, init, true);
+}
+
+async function apiFetchImpl<T>(
+  path: string,
+  init: RequestInit,
+  retried: boolean,
+): Promise<T> {
   const token = getAccessToken();
   const headers = new Headers(init.headers);
   if (
@@ -81,7 +127,7 @@ export async function apiFetch<T>(
     path.includes("/auth/refresh");
   if (res.status === 401 && !isAuthPublic && !retried) {
     const newTok = await tryRefresh();
-    if (newTok) return apiFetch<T>(path, init, true);
+    if (newTok) return apiFetchImpl<T>(path, init, true);
   }
 
   if (res.status === 204) {
